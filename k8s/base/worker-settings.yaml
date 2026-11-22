@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: story-worker-settings
+data:
+  JOB_LEASE_SECONDS: "300"
+  JOB_MAX_ATTEMPTS: "3"
+  JOB_GENERATION_TIMEOUT: "280"
+  AGENT_TIMEOUT_SECONDS: "30"

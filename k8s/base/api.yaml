@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: story-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: story-api
+  template:
+    metadata:
+      labels:
+        app: story-api
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: api
+        image: IMAGE_REPLACE_ME
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: story-db
+              key: database-url
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          periodSeconds: 5
+          timeoutSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          periodSeconds: 10
+          timeoutSeconds: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          periodSeconds: 5
+          failureThreshold: 12
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: story-api
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: story-api
+spec:
+  selector:
+    app: story-api
+  ports:
+  - port: 8000
+    targetPort: 8000

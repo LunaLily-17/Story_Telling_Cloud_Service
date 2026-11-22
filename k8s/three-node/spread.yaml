@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: story-api
+spec:
+  template:
+    spec:
+      topologySpreadConstraints:
+      - $patch: replace
+      - maxSkew: 1
+        minDomains: 2
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        nodeTaintsPolicy: Honor
+        labelSelector:
+          matchLabels:
+            app: story-api
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: story-worker
+spec:
+  template:
+    spec:
+      topologySpreadConstraints:
+      - $patch: replace
+      - maxSkew: 1
+        minDomains: 2
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        nodeTaintsPolicy: Honor
+        labelSelector:
+          matchLabels:
+            app: story-worker
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plot
+spec:
+  template:
+    spec:
+      topologySpreadConstraints:
+      - $patch: replace
+      - maxSkew: 1
+        minDomains: 2
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        nodeTaintsPolicy: Honor
+        labelSelector:
+          matchLabels:
+            app: plot
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: character
+spec:
+  template:
+    spec:
+      topologySpreadConstraints:
+      - $patch: replace
+      - maxSkew: 1
+        minDomains: 2
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        nodeTaintsPolicy: Honor
+        labelSelector:
+          matchLabels:
+            app: character
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dialogue
+spec:
+  template:
+    spec:
+      topologySpreadConstraints:
+      - $patch: replace
+      - maxSkew: 1
+        minDomains: 2
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        nodeTaintsPolicy: Honor
+        labelSelector:
+          matchLabels:
+            app: dialogue
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: refinement
+spec:
+  template:
+    spec:
+      topologySpreadConstraints:
+      - $patch: replace
+      - maxSkew: 1
+        minDomains: 2
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        nodeTaintsPolicy: Honor
+        labelSelector:
+          matchLabels:
+            app: refinement

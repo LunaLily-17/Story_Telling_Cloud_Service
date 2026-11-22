@@ -1,0 +1,11 @@
+# Use only with a dedicated Compose project. Test data lives in memory.
+services:
+  postgres:
+    labels:
+      story-cloud.evidence: "true"
+    volumes: !override
+      - type: tmpfs
+        target: /var/lib/postgresql/data
+  worker:
+    labels:
+      story-cloud.evidence: "true"

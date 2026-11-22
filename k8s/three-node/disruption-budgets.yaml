@@ -1,0 +1,59 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: story-api
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: story-api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: story-worker
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: story-worker
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: plot
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: plot
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: character
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: character
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: dialogue
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: dialogue
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: refinement
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: refinement

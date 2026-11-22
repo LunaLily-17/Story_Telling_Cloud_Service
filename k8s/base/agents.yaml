@@ -1,0 +1,519 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plot
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: plot
+  template:
+    metadata:
+      labels:
+        app: plot
+        component: story-agent
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: plot
+      containers:
+      - name: plot
+        image: IMAGE_REPLACE_ME
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+        command:
+        - uvicorn
+        - agents.service:app
+        - --host
+        - 0.0.0.0
+        - --port
+        - '8000'
+        env:
+        - name: LLM_PROVIDER
+          valueFrom:
+            configMapKeyRef:
+              name: story-llm
+              key: LLM_PROVIDER
+              optional: true
+        - name: LLM_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: story-llm
+              key: LLM_MODEL
+              optional: true
+        - name: LLM_TIMEOUT_SECONDS
+          valueFrom:
+            configMapKeyRef:
+              name: story-llm
+              key: LLM_TIMEOUT_SECONDS
+              optional: true
+        - name: LLM_MAX_ATTEMPTS
+          valueFrom:
+            configMapKeyRef:
+              name: story-llm
+              key: LLM_MAX_ATTEMPTS
+              optional: true
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: story-llm
+              key: OPENAI_API_KEY
+              optional: true
+        - name: GROQ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: story-llm
+              key: GROQ_API_KEY
+              optional: true
+        - name: AGENT_ROLE
+          value: plot
+        ports:
+        - containerPort: 8000
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          periodSeconds: 5
+          timeoutSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          periodSeconds: 10
+          timeoutSeconds: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          periodSeconds: 5
+          failureThreshold: 12
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: plot
+              topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plot
+spec:
+  selector:
+    app: plot
+  ports:
+  - port: 8000
+    targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: character
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: character
+  template:
+    metadata:
+      labels:
+        app: character
+        component: story-agent
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: character
+      containers:
+      - name: character
+        image: IMAGE_REPLACE_ME
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+        command:
+        - uvicorn
+        - agents.service:app
+        - --host
+        - 0.0.0.0
+        - --port
+        - '8000'
+        env:
+        - name: LLM_PROVIDER
+          valueFrom:
+            configMapKeyRef:
+              name: story-llm
+              key: LLM_PROVIDER
+              optional: true
+        - name: LLM_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: story-llm
+              key: LLM_MODEL
+              optional: true
+        - name: LLM_TIMEOUT_SECONDS
+          valueFrom:
+            configMapKeyRef:
+              name: story-llm
+              key: LLM_TIMEOUT_SECONDS
+              optional: true
+        - name: LLM_MAX_ATTEMPTS
+          valueFrom:
+            configMapKeyRef:
+              name: story-llm
+              key: LLM_MAX_ATTEMPTS
+              optional: true
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: story-llm
+              key: OPENAI_API_KEY
+              optional: true
+        - name: GROQ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: story-llm
+              key: GROQ_API_KEY
+              optional: true
+        - name: AGENT_ROLE
+          value: character
+        ports:
+        - containerPort: 8000
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          periodSeconds: 5
+          timeoutSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          periodSeconds: 10
+          timeoutSeconds: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          periodSeconds: 5
+          failureThreshold: 12
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: character
+              topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: character
+spec:
+  selector:
+    app: character
+  ports:
+  - port: 8000
+    targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dialogue
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: dialogue
+  template:
+    metadata:
+      labels:
+        app: dialogue
+        component: story-agent
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: dialogue
+      containers:
+      - name: dialogue
+        image: IMAGE_REPLACE_ME
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+        command:
+        - uvicorn
+        - agents.service:app
+        - --host
+        - 0.0.0.0
+        - --port
+        - '8000'
+        env:
+        - name: LLM_PROVIDER
+          valueFrom:
+            configMapKeyRef:
+              name: story-llm
+              key: LLM_PROVIDER
+              optional: true
+        - name: LLM_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: story-llm
+              key: LLM_MODEL
+              optional: true
+        - name: LLM_TIMEOUT_SECONDS
+          valueFrom:
+            configMapKeyRef:
+              name: story-llm
+              key: LLM_TIMEOUT_SECONDS
+              optional: true
+        - name: LLM_MAX_ATTEMPTS
+          valueFrom:
+            configMapKeyRef:
+              name: story-llm
+              key: LLM_MAX_ATTEMPTS
+              optional: true
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: story-llm
+              key: OPENAI_API_KEY
+              optional: true
+        - name: GROQ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: story-llm
+              key: GROQ_API_KEY
+              optional: true
+        - name: AGENT_ROLE
+          value: dialogue
+        ports:
+        - containerPort: 8000
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          periodSeconds: 5
+          timeoutSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          periodSeconds: 10
+          timeoutSeconds: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          periodSeconds: 5
+          failureThreshold: 12
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: dialogue
+              topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dialogue
+spec:
+  selector:
+    app: dialogue
+  ports:
+  - port: 8000
+    targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: refinement
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: refinement
+  template:
+    metadata:
+      labels:
+        app: refinement
+        component: story-agent
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: refinement
+      containers:
+      - name: refinement
+        image: IMAGE_REPLACE_ME
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+        command:
+        - uvicorn
+        - agents.service:app
+        - --host
+        - 0.0.0.0
+        - --port
+        - '8000'
+        env:
+        - name: LLM_PROVIDER
+          valueFrom:
+            configMapKeyRef:
+              name: story-llm
+              key: LLM_PROVIDER
+              optional: true
+        - name: LLM_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: story-llm
+              key: LLM_MODEL
+              optional: true
+        - name: LLM_TIMEOUT_SECONDS
+          valueFrom:
+            configMapKeyRef:
+              name: story-llm
+              key: LLM_TIMEOUT_SECONDS
+              optional: true
+        - name: LLM_MAX_ATTEMPTS
+          valueFrom:
+            configMapKeyRef:
+              name: story-llm
+              key: LLM_MAX_ATTEMPTS
+              optional: true
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: story-llm
+              key: OPENAI_API_KEY
+              optional: true
+        - name: GROQ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: story-llm
+              key: GROQ_API_KEY
+              optional: true
+        - name: AGENT_ROLE
+          value: refinement
+        ports:
+        - containerPort: 8000
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          periodSeconds: 5
+          timeoutSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          periodSeconds: 10
+          timeoutSeconds: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          periodSeconds: 5
+          failureThreshold: 12
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: refinement
+              topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: refinement
+spec:
+  selector:
+    app: refinement
+  ports:
+  - port: 8000
+    targetPort: 8000

@@ -1,0 +1,16 @@
+# Add alongside docker-compose.yml for local replica and failover exercises.
+x-two-replicas: &two-replicas
+  replicas: 2
+services:
+  api:
+    deploy: {<<: *two-replicas}
+  worker:
+    deploy: {<<: *two-replicas}
+  plot:
+    deploy: {<<: *two-replicas}
+  character:
+    deploy: {<<: *two-replicas}
+  dialogue:
+    deploy: {<<: *two-replicas}
+  refinement:
+    deploy: {<<: *two-replicas}

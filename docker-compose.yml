@@ -1,0 +1,167 @@
+x-llm-environment: &llm-environment
+  LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+  LLM_MODEL: ${LLM_MODEL:-}
+  LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-8}
+  LLM_MAX_ATTEMPTS: ${LLM_MAX_ATTEMPTS:-2}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  GROQ_API_KEY: ${GROQ_API_KEY:-}
+
+x-db-environment: &db-environment
+  POSTGRES_HOST: postgres
+  POSTGRES_DB: story
+  POSTGRES_USER: story
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env or the shell}
+
+x-http-healthcheck: &http-healthcheck
+  test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)"]
+  interval: 5s
+  timeout: 4s
+  retries: 5
+  start_period: 10s
+
+x-agent-resources: &agent-resources
+  resources:
+    reservations: {cpus: "0.05", memory: 64M}
+    limits: {cpus: "0.50", memory: 256M}
+
+services:
+  gateway:
+    image: haproxy:3.2-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8000/ready"]
+      interval: 5s
+      timeout: 4s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        reservations: {cpus: "0.05", memory: 32M}
+        limits: {cpus: "0.50", memory: 128M}
+    volumes:
+      - ./docker/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports: ["127.0.0.1:${APP_PORT:-8000}:8000"]
+    depends_on:
+      api: {condition: service_healthy}
+    networks: [backend]
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: story
+      POSTGRES_USER: story
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env or the shell}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U story -d story"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    deploy:
+      resources:
+        reservations: {cpus: "0.10", memory: 128M}
+        limits: {cpus: "1.0", memory: 512M}
+    volumes:
+      - story_data:/var/lib/postgresql/data
+    networks: [database]
+  migrate:
+    build: .
+    command: ["alembic", "upgrade", "head"]
+    deploy:
+      resources:
+        reservations: {cpus: "0.05", memory: 64M}
+        limits: {cpus: "0.50", memory: 256M}
+    environment:
+      <<: *db-environment
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [database]
+  api:
+    build: .
+    environment:
+      <<: *db-environment
+      PLOT_URL: http://plot:8000
+      CHARACTER_URL: http://character:8000
+      DIALOGUE_URL: http://dialogue:8000
+      REFINEMENT_URL: http://refinement:8000
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck: *http-healthcheck
+    deploy:
+      resources:
+        reservations: {cpus: "0.10", memory: 128M}
+        limits: {cpus: "1.0", memory: 512M}
+    networks: [backend, database]
+  worker:
+    build: .
+    command: ["python", "-m", "app.worker"]
+    restart: unless-stopped
+    stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.worker_health", "ready"]
+      interval: 10s
+      timeout: 4s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        reservations: {cpus: "0.10", memory: 192M}
+        limits: {cpus: "1.0", memory: 512M}
+    environment:
+      <<: *db-environment
+      WORKER_HEALTH_FILE: /tmp/story-worker-live
+      JOB_LEASE_SECONDS: ${JOB_LEASE_SECONDS:-300}
+      JOB_MAX_ATTEMPTS: ${JOB_MAX_ATTEMPTS:-3}
+      JOB_GENERATION_TIMEOUT: ${JOB_GENERATION_TIMEOUT:-280}
+      AGENT_TIMEOUT_SECONDS: ${AGENT_TIMEOUT_SECONDS:-30}
+      PLOT_URL: http://plot:8000
+      CHARACTER_URL: http://character:8000
+      DIALOGUE_URL: http://dialogue:8000
+      REFINEMENT_URL: http://refinement:8000
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      plot: {condition: service_healthy}
+      character: {condition: service_healthy}
+      dialogue: {condition: service_healthy}
+      refinement: {condition: service_healthy}
+    networks: [backend, database]
+  plot:
+    build: .
+    command: ["uvicorn", "agents.service:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      <<: *llm-environment
+      AGENT_ROLE: plot
+    healthcheck: *http-healthcheck
+    deploy: *agent-resources
+    networks: [backend]
+  character:
+    build: .
+    command: ["uvicorn", "agents.service:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      <<: *llm-environment
+      AGENT_ROLE: character
+    healthcheck: *http-healthcheck
+    deploy: *agent-resources
+    networks: [backend]
+  dialogue:
+    build: .
+    command: ["uvicorn", "agents.service:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      <<: *llm-environment
+      AGENT_ROLE: dialogue
+    healthcheck: *http-healthcheck
+    deploy: *agent-resources
+    networks: [backend]
+  refinement:
+    build: .
+    command: ["uvicorn", "agents.service:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      <<: *llm-environment
+      AGENT_ROLE: refinement
+    healthcheck: *http-healthcheck
+    deploy: *agent-resources
+    networks: [backend]
+volumes:
+  story_data:
+networks:
+  backend:
+  database:
+    internal: true

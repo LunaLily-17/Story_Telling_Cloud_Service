@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Story Cloud</title>
+<style>
+body{font:1rem/1.6 system-ui;max-width:46rem;margin:2.5rem auto;padding:0 1rem;background:#f6f8fb;color:#172638}
+h1,h2,h3{line-height:1.25}
+form,article{background:white;padding:1rem 1.2rem;margin:1rem 0;border:1px solid #d5dfe9;border-radius:.6rem}
+label{display:block;font-weight:600}
+input,button{font:inherit;margin:.3rem 0}
+input{width:min(100%,40rem);box-sizing:border-box;padding:.45rem}
+button{background:#224b69;color:white;border:0;border-radius:.35rem;padding:.4rem .9rem}
+p.chapter{white-space:pre-wrap}
+</style>
+<main>
+  <h1>Story Cloud</h1>
+  <p>Open the same story link in another browser to collaborate.</p>
+  <form id="create">
+    <label for="title">Story title</label>
+    <input id="title" value="The Hidden Map" required maxlength="200">
+    <label for="premise">Premise</label>
+    <input id="premise" required minlength="3" maxlength="1000"
+      value="Alex finds a flood map that leads from an archive to an old tunnel and a boathouse.">
+    <button>Create story</button>
+  </form>
+  <section id="story" hidden>
+    <h2 id="storyTitle"></h2>
+    <p id="storyPremise"></p>
+    <p id="version"></p>
+    <form id="continue">
+      <label for="instruction">What should happen next?</label>
+      <input id="instruction" placeholder="Search the tunnel carefully" maxlength="1000" required>
+      <button>Continue story</button>
+    </form>
+    <div id="chapters"></div>
+  </section>
+  <p id="status" role="status"></p>
+  <p><a href="/docs">Open API documentation</a></p>
+</main>
+<script>
+const el = id => document.getElementById(id);
+const id = new URL(location.href).searchParams.get('story');
+const storyPath = id ? '/stories/' + encodeURIComponent(id) : null;
+let version = -1;
+async function request(path, body, key) {
+  const response = await fetch(path, body ? {
+    method:'POST', headers:{
+      'Content-Type':'application/json', ...(key ? {'Idempotency-Key':key} : {})
+    }, body:JSON.stringify(body)
+  } : {cache:'no-store'});
+  return {response, data: await response.json()};
+}
+async function refresh() {
+  const {response, data} = await request(storyPath);
+  if (!response.ok) throw new Error('Could not load the story (' + response.status + ').');
+  if (data.version <= version) return;
+  version = data.version;
+  el('story').hidden = false;
+  el('create').hidden = true;
+  el('storyTitle').textContent = data.title;
+  el('storyPremise').textContent = data.premise;
+  el('version').textContent = 'Committed version ' + version;
+  const chapters = data.chapters.map(chapter => {
+    const article = document.createElement('article');
+    const heading = document.createElement('h3');
+    heading.textContent = 'Chapter ' + chapter.version;
+    const text = document.createElement('p');
+    text.className = 'chapter';
+    text.textContent = chapter.text;
+    article.append(heading, text);
+    return article;
+  });
+  el('chapters').replaceChildren(...chapters);
+}
+function report(error) { el('status').textContent = error.message; }
+el('create').addEventListener('submit', async event => {
+  event.preventDefault();
+  try {
+    const {response, data} = await request('/stories', {
+      title:el('title').value, premise:el('premise').value, genre:'mystery'
+    });
+    if (!response.ok) throw new Error('Could not create a story (' + response.status + ').');
+    location.search = new URLSearchParams({story:data.story_id}).toString();
+  } catch(error) { report(error); }
+});
+const pendingKey = 'story-cloud:pending:' + id;
+const continueButton = el('continue').querySelector('button');
+let pending = id ? JSON.parse(sessionStorage.getItem(pendingKey) || 'null') : null;
+
+function savePending(value) {
+  pending = value;
+  el('instruction').required = !value;
+  if (value) sessionStorage.setItem(pendingKey, JSON.stringify(value));
+  else sessionStorage.removeItem(pendingKey);
+}
+
+async function resumeChapter() {
+  continueButton.disabled = true;
+  try {
+    if (!pending.jobId) {
+      const {response, data} = await request(storyPath + '/continue', pending.body, pending.key);
+      if (!response.ok) {
+        if (response.status >= 400 && response.status < 500 && ![408, 429].includes(response.status)) {
+          savePending(null);
+        }
+        throw new Error('Could not submit the chapter (' + response.status + ').');
+      }
+      savePending({...pending, jobId:data.job_id});
+    }
+    el('status').textContent = 'Chapter queued. Generating...';
+    for (let i=0; i<100; i++) {
+      const job = await request('/jobs/' + encodeURIComponent(pending.jobId));
+      if (!job.response.ok) throw new Error('Cannot check chapter status. Select Check chapter to retry.');
+      const {status, error} = job.data;
+      if (['completed','failed','conflict'].includes(status)) {
+        savePending(null);
+        if (status === 'completed') el('instruction').value = '';
+        el('status').textContent = status === 'completed' ? 'Chapter saved.' :
+          'Chapter ' + status + ': ' + (error || 'try again');
+        await refresh();
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    throw new Error('Chapter is still processing. Select Check chapter to resume polling.');
+  } catch(error) { report(error); }
+  finally {
+    continueButton.textContent = pending ? 'Check chapter' : 'Continue story';
+    continueButton.disabled = false;
+  }
+}
+
+el('continue').addEventListener('submit', event => {
+  event.preventDefault();
+  if (continueButton.disabled) return;
+  if (!pending) {
+    const key = Array.from(crypto.getRandomValues(new Uint8Array(16)),
+      byte => byte.toString(16).padStart(2, '0')).join('');
+    savePending({key, body:{instruction:el('instruction').value, expected_version:version}});
+  }
+  resumeChapter();
+});
+if (id) {
+  refresh().catch(report);
+  if (pending) {
+    el('instruction').required = false;
+    resumeChapter();
+  }
+  setInterval(() => refresh().catch(report), 2000);
+}
+</script>
+</html>
